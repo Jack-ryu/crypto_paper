@@ -1,6 +1,7 @@
-/cccagg.pdf
+/__pycache__
 /data
 /gold_price.xlsx
 /itb_blockchain_data_dictionary.pdf
 /tabula.ipynb
 /tools.py
+/script_tabula.ipynb

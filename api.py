@@ -1,15 +1,17 @@
 
 import requests
 import datetime
-from time import mktime
+import time
 
 import pandas as pd
 
-def timestamp_to_datetime(timestamp:int) -> str:
-    return datetime.datetime.fromtimestamp(int(timestamp)).strftime("%Y-%m-%d") # %H:%M:%S
+from tools import DateManager
 
-def datetime_to_timestamp(datetime:str) -> int:
-    return int(mktime(pd.to_datetime(datetime).timetuple()))
+# def timestamp_to_datetime(timestamp:int) -> str:
+#     return datetime.datetime.fromtimestamp(int(timestamp)).strftime("%Y-%m-%d") # %H:%M:%S
+
+# def datetime_to_timestamp(datetime:str) -> int:
+#     return int(mktime(pd.to_datetime(datetime).timetuple()))
 
 class CryptoCompare:
 
@@ -30,6 +32,8 @@ class CryptoCompare:
             tmp = self.get_coin_list()
             tmp.to_csv("symbol_id.csv")
             self.__coin_list = tmp
+        
+        self.sleep_time = 0.05
 
     @property
     def api_key(self):
@@ -52,6 +56,7 @@ class CryptoCompare:
     
     def __get_something_simple(self, something_url):
         self.__params = {"api_key":self.__api_key}
+        time.sleep(self.sleep_time)
         res = requests.get(url=something_url, params=self.__params).json()
         return pd.DataFrame(res["Data"])
 
@@ -60,17 +65,18 @@ class CryptoCompare:
         self.__params["fsym"] = symbol
         self.__params["tsym"] = "USD"
         self.__params["limit"] = "2000"
-        self.__params["toTs"] = datetime_to_timestamp(end)
+        self.__params["toTs"] = DateManager.str_to_timestamp(end)
         start = pd.to_datetime(start)
 
         result_df = None
         while True:
+            time.sleep(self.sleep_time)
             res = requests.get(url=something_url, params=self.__params).json()
             if res["Response"] != "Success":
                 raise Exception("Request Failed!")
             
             tmp_df = pd.DataFrame(res["Data"]["Data"])
-            tmp_df.index = pd.to_datetime(tmp_df["time"].apply(timestamp_to_datetime))
+            tmp_df.index = pd.to_datetime(DateManager.timestamp_to_datetime(tmp_df["time"]))
 
             if type(result_df) == type(None):
                 result_df = tmp_df.copy()
@@ -88,17 +94,18 @@ class CryptoCompare:
         self.__clear_params()
         self.__params["coinId"] = symbol
         self.__params["limit"] = "2000"
-        self.__params["toTs"] = datetime_to_timestamp(end)
+        self.__params["toTs"] = DateManager.str_to_timestamp(end)
         start = pd.to_datetime(start)
 
         result_df = None
         while True:
+            time.sleep(self.sleep_time)
             res = requests.get(url=something_url, params=self.__params).json()
             if res["Response"] != "Success":
                 raise Exception("Request Failed!")
             
             tmp_df = pd.DataFrame(res["Data"]["Data"])
-            tmp_df.index = pd.to_datetime(tmp_df["time"].apply(timestamp_to_datetime))
+            tmp_df.index = pd.to_datetime(DateManager.timestamp_to_datetime(tmp_df["time"]))
 
             if type(result_df) == type(None):
                 result_df = tmp_df.copy()
@@ -120,7 +127,7 @@ class CryptoCompare:
 
     def get_coin_list(self):
         result_df = self.__get_something_simple(something_url=self.__urls["coin_list"]).T
-        result_df["data_available_date"] = pd.to_datetime(result_df["data_available_from"].apply(timestamp_to_datetime))
+        result_df["data_available_date"] = pd.to_datetime(DateManager.timestamp_to_datetime(result_df["data_available_from"]))
         return result_df
 
     def get_daily_ohlcv(self, symbol, start, end):
@@ -132,17 +139,18 @@ class CryptoCompare:
     def get_daily_social(self, symbol, start, end):
         self.__params["coinID"] = self.symbol_to_id(symbol)
         self.__params["limit"] = "2000"
-        self.__params["toTs"] = datetime_to_timestamp(end)
+        self.__params["toTs"] = DateManager.str_to_timestamp(end)
         start = pd.to_datetime(start)
 
         result_df = None
         while True:
+            time.sleep(self.sleep_time)
             res = requests.get(url=self.__urls["social_data"], params=self.__params).json()
             if res["Response"] != "Success":
                 raise Exception("Request Failed!")
             
             tmp_df = pd.DataFrame(res["Data"])
-            tmp_df.index = pd.to_datetime(tmp_df["time"].apply(timestamp_to_datetime))
+            tmp_df.index = pd.to_datetime(DateManager.timestamp_to_datetime(tmp_df["time"]))
 
             if type(result_df) == type(None):
                 result_df = tmp_df.copy()
