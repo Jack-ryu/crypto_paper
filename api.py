@@ -1,8 +1,8 @@
 
 import requests
-import datetime
 import time
 
+import numpy as np
 import pandas as pd
 
 from tools import DateManager
@@ -21,17 +21,18 @@ class CryptoCompare:
 
         self.__urls = {}
         self.__urls["rate_limit"] = "https://min-api.cryptocompare.com/stats/rate/limit"
-        self.__urls["coin_list"] = "https://min-api.cryptocompare.com/data/blockchain/list"
+        self.__urls["blockchain_coin_list"] = "https://min-api.cryptocompare.com/data/blockchain/list"
         self.__urls["hist_ohlcv"] = "https://min-api.cryptocompare.com/data/v2/histoday?"
         self.__urls["hist_blockchain"] = "https://min-api.cryptocompare.com/data/blockchain/histo/day?"
         self.__urls["social_data"] = "https://min-api.cryptocompare.com/data/social/coin/histo/day?"
+        self.__urls["all_coin_list"] = "https://min-api.cryptocompare.com/data/all/coinlist"
 
-        try:
-            self.__coin_list = pd.read_csv("symbol_id.csv", index_col=0)
-        except:
-            tmp = self.get_coin_list()
-            tmp.to_csv("symbol_id.csv")
-            self.__coin_list = tmp
+        # try:
+        #     self.__coin_list = pd.read_csv("social_symbol_id.csv", index_col=0)
+        # except:
+        #     tmp = self.get_coin_list()
+        #     tmp.to_csv("social_symbol_id.csv")
+        #     self.__coin_list = tmp
         
         self.sleep_time = 0.05
 
@@ -47,9 +48,9 @@ class CryptoCompare:
     def urls(self):
         return self.__urls
 
-    @property
-    def coin_list(self):
-        return self.__coin_list
+    # @property
+    # def coin_list(self):
+    #     return self.__coin_list
 
     def __clear_params(self):
         self.__params = {"api_key":self.__api_key}
@@ -61,14 +62,16 @@ class CryptoCompare:
         return pd.DataFrame(res["Data"])
 
     def __get_something_daily_symbol(self, something_url, symbol, start, end):
+        start = pd.to_datetime(start)
+
         self.__clear_params()
         self.__params["fsym"] = symbol
         self.__params["tsym"] = "USD"
         self.__params["limit"] = "2000"
         self.__params["toTs"] = DateManager.str_to_timestamp(end)
-        start = pd.to_datetime(start)
 
         result_df = None
+        before_df = None
         while True:
             time.sleep(self.sleep_time)
             res = requests.get(url=something_url, params=self.__params).json()
@@ -80,9 +83,14 @@ class CryptoCompare:
 
             if type(result_df) == type(None):
                 result_df = tmp_df.copy()
+                before_df = tmp_df.copy()
             else:
-                result_df = pd.concat([tmp_df, result_df], axis=0)
-            
+                if np.array_equal(before_df.values, tmp_df.values):
+                    break
+                else:
+                    result_df = pd.concat([tmp_df, result_df], axis=0)
+                    before_df = tmp_df.copy()
+                
             if result_df.index[0] <= start:
                 break
             
@@ -125,9 +133,13 @@ class CryptoCompare:
     def get_rate_limit(self):
         return self.__get_something_simple(something_url=self.__urls["rate_limit"])
 
-    def get_coin_list(self):
-        result_df = self.__get_something_simple(something_url=self.__urls["coin_list"]).T
+    def get_blockchain_coin_list(self):
+        result_df = self.__get_something_simple(something_url=self.__urls["blockchain_coin_list"]).T
         result_df["data_available_date"] = pd.to_datetime(DateManager.timestamp_to_datetime(result_df["data_available_from"]))
+        return result_df
+    
+    def get_all_coin_list(self):
+        result_df = self.__get_something_simple(something_url=self.__urls["all_coin_list"]).T
         return result_df
 
     def get_daily_ohlcv(self, symbol, start, end):
@@ -136,13 +148,17 @@ class CryptoCompare:
     def get_daily_blockchain(self, symbol, start, end):
         return self.__get_something_daily_symbol(something_url=self.__urls["hist_blockchain"], symbol=symbol, start=start, end=end)
     
-    def get_daily_social(self, symbol, start, end):
-        self.__params["coinID"] = self.symbol_to_id(symbol)
+    def get_daily_social(self, symbol, start, end, isId=False):
+        if isId:
+            self.__params["coinID"] = symbol
+        else:
+            self.__params["coinID"] = self.symbol_to_id(symbol)
         self.__params["limit"] = "2000"
         self.__params["toTs"] = DateManager.str_to_timestamp(end)
         start = pd.to_datetime(start)
 
         result_df = None
+        before_df = None
         while True:
             time.sleep(self.sleep_time)
             res = requests.get(url=self.__urls["social_data"], params=self.__params).json()
@@ -154,8 +170,13 @@ class CryptoCompare:
 
             if type(result_df) == type(None):
                 result_df = tmp_df.copy()
+                before_df = tmp_df.copy()
             else:
-                result_df = pd.concat([tmp_df, result_df], axis=0)
+                if np.array_equal(before_df.values, tmp_df.values):
+                    break
+                else:
+                    result_df = pd.concat([tmp_df, result_df], axis=0)
+                    before_df = tmp_df.copy()
             
             if result_df.index[0] <= start:
                 break
