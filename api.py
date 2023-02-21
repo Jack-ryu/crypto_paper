@@ -27,8 +27,10 @@ class CryptoCompare(metaclass=Singleton):
         self.__urls["hist_blockchain"] = "https://min-api.cryptocompare.com/data/blockchain/histo/day?"
         self.__urls["social_data"] = "https://min-api.cryptocompare.com/data/social/coin/histo/day?"
         self.__urls["all_coin_list"] = "https://min-api.cryptocompare.com/data/all/coinlist"
-        
+
         self.sleep_time = 0.05
+        
+        self.all_coin_list = self.get_all_coin_list()
 
     @property
     def api_key(self):
@@ -118,7 +120,7 @@ class CryptoCompare(metaclass=Singleton):
         return result_df.loc[start.strftime("%Y-%m-%d"):end]
 
     def symbol_to_id(self, symbol):
-        return self.__coin_list[self.__coin_list["symbol"]==symbol]["id"][0]
+        return self.all_coin_list[self.all_coin_list["Symbol"]==symbol]["Id"][0]
 
     def get_rate_limit(self):
         return self.__get_something_simple(something_url=self.__urls["rate_limit"])
