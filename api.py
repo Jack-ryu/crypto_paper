@@ -1,19 +1,20 @@
 
+import argparse
+import io
 import requests
 import time
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from oauth2client import file, client, tools
 
-from tools import DateManager
+from tools import Singleton, DateManager
 
-# def timestamp_to_datetime(timestamp:int) -> str:
-#     return datetime.datetime.fromtimestamp(int(timestamp)).strftime("%Y-%m-%d") # %H:%M:%S
 
-# def datetime_to_timestamp(datetime:str) -> int:
-#     return int(mktime(pd.to_datetime(datetime).timetuple()))
-
-class CryptoCompare:
+class CryptoCompare(metaclass=Singleton):
 
     def __init__(self, api_key):
         self.__api_key = api_key
@@ -26,13 +27,6 @@ class CryptoCompare:
         self.__urls["hist_blockchain"] = "https://min-api.cryptocompare.com/data/blockchain/histo/day?"
         self.__urls["social_data"] = "https://min-api.cryptocompare.com/data/social/coin/histo/day?"
         self.__urls["all_coin_list"] = "https://min-api.cryptocompare.com/data/all/coinlist"
-
-        # try:
-        #     self.__coin_list = pd.read_csv("social_symbol_id.csv", index_col=0)
-        # except:
-        #     tmp = self.get_coin_list()
-        #     tmp.to_csv("social_symbol_id.csv")
-        #     self.__coin_list = tmp
         
         self.sleep_time = 0.05
 
@@ -47,10 +41,6 @@ class CryptoCompare:
     @property
     def urls(self):
         return self.__urls
-
-    # @property
-    # def coin_list(self):
-    #     return self.__coin_list
 
     def __clear_params(self):
         self.__params = {"api_key":self.__api_key}
@@ -184,3 +174,166 @@ class CryptoCompare:
             self.__params["toTs"] = result_df["time"].iloc[0]
 
         return result_df.loc[start.strftime("%Y-%m-%d"):end]
+
+
+class GoogleDrive(metaclass=Singleton):
+
+    def __init__(self, json_loc):
+        """Google Drive API.
+
+        Args:
+            json_loc (str): local location of json files e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+        
+        """
+        self.json_loc = json_loc
+    
+        # api 연결 및 사전정보 입력
+        SCOPES = [
+            'https://www.googleapis.com/auth/drive.metadata', 
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/drive',
+        ]
+        store = file.Storage(json_loc+"storage.json")
+        creds = store.get()
+            
+        # 권한 인증 창. 제일 처음만 창이 띄워짐
+        try :
+            try:
+                flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
+            except:
+                flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args(args=[])
+        except ImportError:
+            flags = None
+        if not creds or creds.invalid:
+            flow = client.flow_from_clientsecrets(json_loc+"client_secret_drive.json", SCOPES)
+            creds = tools.run_flow(flow, store, flags) if flags else tools.run_flow(flow, store)
+            
+        self.service = build('drive','v3', credentials=creds)
+
+    def create_folder(self, folder_name, parent="CryptoPaperResearch"):
+        """Create a New Folder.
+
+        Args:
+            folder_name (str): name of new drive folder
+            parents (str): name of parent drive folder
+
+        Note:
+            new folder is created under parent folder
+
+        """
+        folder_metadata = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder"
+        }
+        if parent is None:
+            pass
+        else:
+            folder_metadata["parents"] = [self.list_folders()[parent]]
+
+        self.service.files().create(body=folder_metadata, fields='id').execute()
+        print(f"Folder {folder_name} is created under {parent}")
+
+    def list_folders(self, parent=None):
+        """List Folders.
+
+        Args:
+            parent (str): name of parent drive folder, default None
+        
+        Return:
+            dictionary of folders {name:id}
+        
+        """
+        query = "mimeType='application/vnd.google-apps.folder' and trashed=false"
+        if parent is not None:
+            query = f"'{self.list_folders()[parent]}' in parents" + query
+        results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)").execute()
+        items = results.get("files", [])
+        dict_items = {}
+        for item in items:
+            dict_items[item["name"]] = item["id"]
+        return dict_items
+
+    def list_files(self, folder_name):
+        """List Files.
+
+        Args:
+            folder_name (str): name of parent drive folder
+        
+        Return:
+            dictionary of files {name:id}
+        
+        """
+        query = f"'{self.list_folders()[folder_name]}' in parents and trashed=false"
+        results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)").execute()
+        items = results.get('files', [])
+        dict_items = {}
+        for item in items:
+            dict_items[item["name"]] = item["id"]
+        return dict_items
+
+    def upload(self, folder_name, file_loc, file_name):
+        """Upload File.
+
+        Args:
+            folder_name (str): name of drive folder
+            file_loc (str): lcoal location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_name (str): name of file e.g.) "test.csv"
+        
+        """
+        # parents: 업로드할 구글 드라이브 위치의 url 마지막 ID
+        file_metadata = {
+            "name": file_name,
+            "parents": [self.list_folders()[folder_name]]
+        }
+        # 파일 업로드
+        media = MediaFileUpload(file_loc+file_name, resumable=True)
+        self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        print(f"{file_name} is uploaded on {folder_name}")
+
+    def download(self, folder_name, file_loc, file_name):
+        """Download File.
+
+        Args:
+            folder_name (str): name of drive folder
+            file_loc (str): local location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_name (str): name of file e.g.) "test.csv"
+        
+        """
+        fh = io.FileIO(file_loc+file_name, "wb")
+        request = self.service.files().get_media(fileId=self.list_files(folder_name)[file_name])
+
+        MediaIoBaseDownload(fh, request).next_chunk()
+        print(f"{file_name} is downloaded from {folder_name}")
+
+    def multi_upload(self, folder_name, file_loc, file_name_list):
+        """Upload Multiple Files.
+
+        Args:
+            folder_name (str): name of drive folder
+            file_loc (str): lcoal location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_name_list (list[str]): list with name of files e.g.) ["test1.csv","test2.csv"]
+        
+        """
+        parent_folder_id = self.list_folders()[folder_name]
+        for file_name in tqdm(file_name_list, desc="Uploading Files..."):
+            file_metadata = {
+                "name": file_name,
+                "parents": [parent_folder_id]
+            }
+            media = MediaFileUpload(file_loc+file_name, resumable=True)
+            self.service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    
+    def multi_download(self, folder_name, file_loc, file_name_list):
+        """Download Multiple Files.
+
+        Args:
+            folder_name (str): name of drive folder
+            file_loc (str): local location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_name_list (list[str]): list with name of files e.g.) ["test1.csv","test2.csv"]
+        
+        """
+        file_id_dict = self.list_files(folder_name)
+        for file_name in tqdm(file_name_list, desc="Downloading Files..."):
+            fh = io.FileIO(file_loc+file_name, "wb")
+            request = self.service.files().get_media(fileId=file_id_dict[file_name])
+            MediaIoBaseDownload(fh, request).next_chunk()
