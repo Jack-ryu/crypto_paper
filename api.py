@@ -182,7 +182,7 @@ class GoogleDrive(metaclass=Singleton):
         """Google Drive API.
 
         Args:
-            json_loc (str): local location of json files e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            json_loc (str): local location of json files e.g.) "C:\\Users\\Users\\Desktop\\Data\\"
         
         """
         self.json_loc = json_loc
@@ -276,7 +276,7 @@ class GoogleDrive(metaclass=Singleton):
 
         Args:
             folder_name (str): name of drive folder
-            file_loc (str): lcoal location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_loc (str): lcoal location of file e.g.) "C:\\Users\\Users\\Desktop\\Data\\"
             file_name (str): name of file e.g.) "test.csv"
         
         """
@@ -295,7 +295,7 @@ class GoogleDrive(metaclass=Singleton):
 
         Args:
             folder_name (str): name of drive folder
-            file_loc (str): local location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_loc (str): local location of file e.g.) "C:\\Users\\Users\\Desktop\\Data\\"
             file_name (str): name of file e.g.) "test.csv"
         
         """
@@ -310,7 +310,7 @@ class GoogleDrive(metaclass=Singleton):
 
         Args:
             folder_name (str): name of drive folder
-            file_loc (str): lcoal location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_loc (str): lcoal location of file e.g.) "C:\\Users\\Users\\Desktop\\Data\\"
             file_name_list (list[str]): list with name of files e.g.) ["test1.csv","test2.csv"]
         
         """
@@ -328,7 +328,7 @@ class GoogleDrive(metaclass=Singleton):
 
         Args:
             folder_name (str): name of drive folder
-            file_loc (str): local location of file e.g.) "C:\\\Users\\Users\\Desktop\\Data\\"
+            file_loc (str): local location of file e.g.) "C:\\Users\\Users\\Desktop\\Data\\"
             file_name_list (list[str]): list with name of files e.g.) ["test1.csv","test2.csv"]
         
         """
