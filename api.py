@@ -247,7 +247,7 @@ class GoogleDrive(metaclass=Singleton):
         """
         query = "mimeType='application/vnd.google-apps.folder' and trashed=false"
         if parent is not None:
-            query = f"'{self.list_folders()[parent]}' in parents" + query
+            query = f"'{self.list_folders()[parent]}' in parents and" + query
         results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)").execute()
         items = results.get("files", [])
         dict_items = {}
