@@ -245,14 +245,19 @@ class GoogleDrive(metaclass=Singleton):
             dictionary of folders {name:id}
         
         """
+        dict_items = {}
         query = "mimeType='application/vnd.google-apps.folder' and trashed=false"
         if parent is not None:
             query = f"'{self.list_folders()[parent]}' in parents and" + query
-        results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)").execute()
-        items = results.get("files", [])
-        dict_items = {}
-        for item in items:
-            dict_items[item["name"]] = item["id"]
+        page_token = None
+        while True:
+            results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)").execute()
+            items = results.get("files", [])
+            for item in items:
+                dict_items[item["name"]] = item["id"]
+            page_token = results.get("nexPageToken", None)
+            if page_token is None:
+                break
         return dict_items
 
     def list_files(self, folder_name):
@@ -265,12 +270,17 @@ class GoogleDrive(metaclass=Singleton):
             dictionary of files {name:id}
         
         """
-        query = f"'{self.list_folders()[folder_name]}' in parents and trashed=false"
-        results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)").execute()
-        items = results.get('files', [])
         dict_items = {}
-        for item in items:
-            dict_items[item["name"]] = item["id"]
+        query = f"'{self.list_folders()[folder_name]}' in parents and trashed=false"
+        page_token = None
+        while True:
+            results = self.service.files().list(q=query, pageSize=1000, fields="nextPageToken, files(name, id)", pageToken=page_token).execute()
+            items = results.get("files", [])
+            for item in items:
+                dict_items[item["name"]] = item["id"]
+            page_token = results.get("nextPageToken", None)
+            if page_token is None:
+                break
         return dict_items
 
     def upload(self, folder_name, file_loc, file_name):
