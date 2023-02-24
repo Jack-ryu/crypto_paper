@@ -17,6 +17,12 @@ from tools import Singleton, DateManager
 class CryptoCompare(metaclass=Singleton):
 
     def __init__(self, api_key):
+        """CryptoCompare API Class.
+
+        Args:
+            api_key (str): api key
+        
+        """
         self.__api_key = api_key
         self.__params = {"api_key":self.__api_key}
 
@@ -121,27 +127,66 @@ class CryptoCompare(metaclass=Singleton):
         return result_df.loc[start.strftime("%Y-%m-%d"):end]
 
     def symbol_to_id(self, symbol):
+        """Return an id of a symbol.
+        
+        Args:
+            symbol (str): symbol of a coint e.g.) "BTC"
+        
+        """
         return self.all_coin_list[self.all_coin_list["Symbol"]==symbol]["Id"][0]
 
     def get_rate_limit(self):
+        """Get rate limit.
+        
+        """
         return self.__get_something_simple(something_url=self.__urls["rate_limit"])
 
     def get_blockchain_coin_list(self):
+        """Get coin list with blockchain data.
+        
+        """
         result_df = self.__get_something_simple(something_url=self.__urls["blockchain_coin_list"]).T
         result_df["data_available_date"] = pd.to_datetime(DateManager.timestamp_to_datetime(result_df["data_available_from"]))
         return result_df
     
     def get_all_coin_list(self):
+        """Get list of all coins.
+        
+        """
         result_df = self.__get_something_simple(something_url=self.__urls["all_coin_list"]).T
         return result_df
 
     def get_daily_ohlcv(self, symbol, start, end):
+        """Get daily ohlc of a coin.
+
+        Args:
+            symbol (str): symbol of a coin
+            start (str): start date %Y-%m-%d format e.g.) 2020-01-01
+            end (str): end date %Y-%m-%d format e.g.) 2020-01-01
+        
+        """
         return self.__get_something_daily_symbol(something_url=self.__urls["hist_ohlcv"], symbol=symbol, start=start, end=end)
 
     def get_daily_blockchain(self, symbol, start, end):
+        """Get daily blockchain data of a coin.
+
+        Args:
+            symbol (str): symbol of a coin
+            start (str): start date %Y-%m-%d format e.g.) 2020-01-01
+            end (str): end date %Y-%m-%d format e.g.) 2020-01-01
+        
+        """
         return self.__get_something_daily_symbol(something_url=self.__urls["hist_blockchain"], symbol=symbol, start=start, end=end)
     
     def get_daily_volume(self, symbol, start, end):
+        """Get daily trading volume data of a coin.
+
+        Args:
+            symbol (str): symbol of a coin
+            start (str): start date %Y-%m-%d format e.g.) 2020-01-01
+            end (str): end date %Y-%m-%d format e.g.) 2020-01-01
+        
+        """
         start = pd.to_datetime(start)
 
         self.__clear_params()
@@ -177,6 +222,14 @@ class CryptoCompare(metaclass=Singleton):
         return result_df.loc[start.strftime("%Y-%m-%d"):end]
     
     def get_daily_social(self, symbol, start, end, isId=False):
+        """Get daily social data of a coin.
+
+        Args:
+            symbol (str): symbol of a coin
+            start (str): start date %Y-%m-%d format e.g.) 2020-01-01
+            end (str): end date %Y-%m-%d format e.g.) 2020-01-01
+        
+        """
         if isId:
             self.__params["coinID"] = symbol
         else:
@@ -389,6 +442,12 @@ class GoogleDrive(metaclass=Singleton):
 class CoinGecko(metaclass=Singleton):
 
     def __init__(self):
+        """CoinGecko API Class.
+
+        Note:
+            No API key is need.
+        
+        """
         self.base_url = "https://api.coingecko.com/api/v3/"
         self.sleep_time = 6
 
@@ -403,6 +462,12 @@ class CoinGecko(metaclass=Singleton):
         return res.json()
     
     def get_coin_price_cap(self, id):
+        """Get coin price and market cap.
+
+        Args:
+            id (str): coin id of CoinGecko. You can get it from .get_coin_list method
+        
+        """
         params = {
             "id":id,
             "vs_currency":"usd",
@@ -419,19 +484,3 @@ class CoinGecko(metaclass=Singleton):
 
         return pd.DataFrame(res_dict, columns=["prices","market_caps","total_volumes"], index=pd.to_datetime(res_index, unit="ms"))
     
-    def get_index_price_cap(self, id):
-        params = {
-            "id":id,
-            "vs_currency":"usd",
-            "days":"max",
-            "interval":"daily"
-        }
-        res = requests.get(url=self.base_url+f"/coins/{id}/market_chart", params=params).json()
-
-        res_dict = {}
-        res_index = [val[0] for val in res["prices"]]
-        res_dict["prices"] = [val[1] for val in res["prices"]]
-        res_dict["market_caps"] = [val[1] for val in res["market_caps"]]
-        res_dict["total_volumes"] = [val[1] for val in res["total_volumes"]]
-
-        return pd.DataFrame(res_dict, columns=["prices","market_caps","total_volumes"], index=pd.to_datetime(res_index, unit="ms"))
