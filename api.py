@@ -378,10 +378,60 @@ class GoogleDrive(metaclass=Singleton):
             folder_name (str): name of drive folder
             file_loc (str): local location of file e.g.) "C:\\Users\\Users\\Desktop\\Data\\"
             file_name_list (list[str]): list with name of files e.g.) ["test1.csv","test2.csv"]
-        
+            `
         """
         file_id_dict = self.list_files(folder_name)
         for file_name in tqdm(file_name_list, desc="Downloading Files..."):
             fh = io.FileIO(file_loc+file_name, "wb")
             request = self.service.files().get_media(fileId=file_id_dict[file_name])
             MediaIoBaseDownload(fh, request).next_chunk()
+
+class CoinGecko(metaclass=Singleton):
+
+    def __init__(self):
+        self.base_url = "https://api.coingecko.com/api/v3/"
+        self.sleep_time = 6
+
+    def get_coin_list(self):
+        res = requests.get(url=self.base_url+"/coins/list")
+        res.raise_for_status()
+        return res.json()
+    
+    def get_index_list(self):
+        res = requests.get(url=self.base_url+"/indexes/list")
+        res.raise_for_status()
+        return res.json()
+    
+    def get_coin_price_cap(self, id):
+        params = {
+            "id":id,
+            "vs_currency":"usd",
+            "days":"max",
+            "interval":"daily"
+        }
+        res = requests.get(url=self.base_url+f"/coins/{id}/market_chart", params=params).json()
+
+        res_dict = {}
+        res_index = [val[0] for val in res["prices"]]
+        res_dict["prices"] = [val[1] for val in res["prices"]]
+        res_dict["market_caps"] = [val[1] for val in res["market_caps"]]
+        res_dict["total_volumes"] = [val[1] for val in res["total_volumes"]]
+
+        return pd.DataFrame(res_dict, columns=["prices","market_caps","total_volumes"], index=pd.to_datetime(res_index, unit="ms"))
+    
+    def get_index_price_cap(self, id):
+        params = {
+            "id":id,
+            "vs_currency":"usd",
+            "days":"max",
+            "interval":"daily"
+        }
+        res = requests.get(url=self.base_url+f"/coins/{id}/market_chart", params=params).json()
+
+        res_dict = {}
+        res_index = [val[0] for val in res["prices"]]
+        res_dict["prices"] = [val[1] for val in res["prices"]]
+        res_dict["market_caps"] = [val[1] for val in res["market_caps"]]
+        res_dict["total_volumes"] = [val[1] for val in res["total_volumes"]]
+
+        return pd.DataFrame(res_dict, columns=["prices","market_caps","total_volumes"], index=pd.to_datetime(res_index, unit="ms"))
