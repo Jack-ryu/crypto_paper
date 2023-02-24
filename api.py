@@ -27,6 +27,7 @@ class CryptoCompare(metaclass=Singleton):
         self.__urls["hist_blockchain"] = "https://min-api.cryptocompare.com/data/blockchain/histo/day?"
         self.__urls["social_data"] = "https://min-api.cryptocompare.com/data/social/coin/histo/day?"
         self.__urls["all_coin_list"] = "https://min-api.cryptocompare.com/data/all/coinlist"
+        self.__urls["hist_volume"] = "https://min-api.cryptocompare.com/data/symbol/histoday"
 
         self.sleep_time = 0.05
         
@@ -139,6 +140,41 @@ class CryptoCompare(metaclass=Singleton):
 
     def get_daily_blockchain(self, symbol, start, end):
         return self.__get_something_daily_symbol(something_url=self.__urls["hist_blockchain"], symbol=symbol, start=start, end=end)
+    
+    def get_daily_volume(self, symbol, start, end):
+        start = pd.to_datetime(start)
+
+        self.__clear_params()
+        self.__params["fsym"] = symbol
+        self.__params["tsym"] = "USD"
+        self.__params["limit"] = "2000"
+        self.__params["toTs"] = DateManager.str_to_timestamp(end)
+
+        result_df = None
+        before_df = None
+        while True:
+            time.sleep(self.sleep_time)
+            res = requests.get(url=self.__urls["hist_volume"], params=self.__params).json()
+            
+            tmp_df = pd.DataFrame(res["Data"])
+            tmp_df.index = pd.to_datetime(DateManager.timestamp_to_datetime(tmp_df["time"]))
+
+            if type(result_df) == type(None):
+                result_df = tmp_df.copy()
+                before_df = tmp_df.copy()
+            else:
+                if np.array_equal(before_df.values, tmp_df.values):
+                    break
+                else:
+                    result_df = pd.concat([tmp_df, result_df], axis=0)
+                    before_df = tmp_df.copy()
+                
+            if result_df.index[0] <= start:
+                break
+            
+            self.__params["toTs"] = result_df["time"].iloc[0]
+
+        return result_df.loc[start.strftime("%Y-%m-%d"):end]
     
     def get_daily_social(self, symbol, start, end, isId=False):
         if isId:
