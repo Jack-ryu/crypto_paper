@@ -13,3 +13,5 @@ google_script.py
 progress.ipynb
 cc_script.py
 *pickle
+/coingecko
+*csv
