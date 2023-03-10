@@ -15,3 +15,6 @@ cc_script.py
 *pickle
 /coingecko
 *csv
+/find_nan.ipynb
+/mongo_data.py
+/collect_coincodex.py
