@@ -18,3 +18,5 @@ cc_script.py
 /find_nan.ipynb
 /mongo_data.py
 /collect_coincodex.py
+/coin_api.ipynb
+/
