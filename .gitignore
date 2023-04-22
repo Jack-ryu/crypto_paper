@@ -19,7 +19,7 @@ cc_script.py
 /mongo_data.py
 /collect_coincodex.py
 /coin_api.ipynb
-/ryu_new_progress/coinmarketcap_api.ipynb
+/ryu_new_progress/data_progress/coinmarketcap_api.ipynb
 /api.py
 
 /maybe_useful/collect_data

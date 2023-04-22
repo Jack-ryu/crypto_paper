@@ -43,13 +43,24 @@ def print_statistics(return_dict:dict,
         
     mean = [(df.iloc[1:].mean() * 365).round(6) for key, df in return_dict.items()]          
     std = [df.iloc[1:].std() * np.sqrt(365) for key, df in return_dict.items()]
-    cagr =[calculate_cagr(df.iloc[1:]) for key, df in return_dict.items()]         
+    cagr =[calculate_cagr(df.iloc[1:]) for key, df in return_dict.items()]
+    mdd = []
     
-    return_df = pd.DataFrame([cagr,mean,std], index=["CAGR", "Mean","STD"])
+    for key, df in return_dict.items():
+        cum_df = (df+1).cumprod()
+        peak = cum_df.cummax()
+        drawdown = (cum_df-peak)/peak
+        mdd.append((-drawdown).max().round(3))
+    
+    return_df = pd.DataFrame([cagr,mean,std,mdd], index=["CAGR", "Mean","STD","MDD"])
     
     if mkt_rtn != None:
-        mkt = pd.DataFrame([calculate_cagr(mkt_rtn.iloc[1:]), mkt_rtn.iloc[1:].mean() * 365, mkt_rtn.iloc[1:].std() * np.sqrt(365)],
-                               index=["CAGR", "Mean","STD"], columns=["MKT"])
+        cum_df = (mkt_rtn+1).cumprod()
+        peak = cum_df.cummax()
+        drawdown = (cum_df-peak)/peak
+        mdd= (-drawdown).max().round(3)
+        mkt = pd.DataFrame([calculate_cagr(mkt_rtn.iloc[1:]), mkt_rtn.iloc[1:].mean() * 365, mkt_rtn.iloc[1:].std() * np.sqrt(365), mdd],
+                               index=["CAGR", "Mean","STD","MDD"], columns=["MKT"])
         
         return_df = pd.concat([return_df, mkt], axis=1)
     return_df.loc["Sharpe",:] = (return_df.loc["Mean",:]) / (return_df.loc["STD",:])
@@ -84,7 +95,7 @@ def draw_return_result(return_dict:dict,
         cum_df = (df+1).cumprod()
         cum_df.plot(ax=axes[0])
             
-        axes[0].set_title(f"Cross-Sectional Momentum Portfolio Value of {key} weighted by marketcap")
+        axes[0].set_title(f"Cross-Sectional Momentum Value Weighted Result of {key}")
         axes[0].grid()
         axes[0].legend(["Startegy","MKT"])
         
