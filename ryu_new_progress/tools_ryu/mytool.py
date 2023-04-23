@@ -3,12 +3,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from statsmodels.api import OLS, add_constant
 
+
 def calculate_cagr(return_df):
     '''rtn을 받았을 때, CAGR을 계산합니다'''
     holding_year = (len(return_df) / 365)
     cum = (return_df+1).cumprod()
     cagr = (cum.iloc[-1] / cum.iloc[0]) ** (1/holding_year) -1
-    return str(cagr.round(6)*100) + "%"
+    return str(cagr.round(4)*100) + "%"
+
 
 def run_alpha_regression(return_dict:dict, 
                          mkt_rtn:pd.Series,
@@ -34,38 +36,67 @@ def run_alpha_regression(return_dict:dict,
         print(f"{key} Regression Result")
         print(result.summary2())
         
+        
 def print_statistics(return_dict:dict,
-                     mkt_rtn=None):
+                     mkt_rtn=None,
+                     start_date=None):
     '''return_dict : dict(전략 수익률이 담긴 딕셔너리)
        mkt_rtn     : pd.Series (마켓 수익률이 담긴 시리즈)
        
-       Note) mean, std, cagr 계산할 때 시작일은 포함하지 않습니다'''
-        
-    mean = [(df.iloc[1:].mean() * 365).round(6) for key, df in return_dict.items()]          
-    std = [df.iloc[1:].std() * np.sqrt(365) for key, df in return_dict.items()]
-    cagr =[calculate_cagr(df.iloc[1:]) for key, df in return_dict.items()]
+       Note) mean, std, cagr 계산할 때 시작일은 포함하지 않습니다(시작일 수익은 0이라서)'''
+
+    mean = []
+    std = []
+    cagr = []
     mdd = []
     
     for key, df in return_dict.items():
-        cum_df = (df+1).cumprod()
+        if start_date != None:
+            df2 = df.loc[start_date:].iloc[1:]
+        else:
+            df2 = df.iloc[1:]
+            
+        m = (df2.mean() * 365).round(5)   
+        mean.append(m)
+        
+        s = (df2.std() * np.sqrt(365))
+        std.append(s)
+        
+        ca = calculate_cagr(df2)
+        cagr.append(ca)
+        
+        cum_df = (df2+1).cumprod()
         peak = cum_df.cummax()
         drawdown = (cum_df-peak)/peak
-        mdd.append((-drawdown).max().round(3))
+        mdd.append(round((-drawdown).max(),3))
     
     return_df = pd.DataFrame([cagr,mean,std,mdd], index=["CAGR", "Mean","STD","MDD"])
     
     if mkt_rtn != None:
-        cum_df = (mkt_rtn+1).cumprod()
+        
+        if start_date != None:
+            mkt_rtn2 = mkt_rtn.loc[start_date:].iloc[1:]
+        else:
+            mkt_rtn2 = mkt_rtn.iloc[1:]
+            
+        cum_df = (mkt_rtn2+1).cumprod()
         peak = cum_df.cummax()
         drawdown = (cum_df-peak)/peak
-        mdd= (-drawdown).max().round(3)
-        mkt = pd.DataFrame([calculate_cagr(mkt_rtn.iloc[1:]), mkt_rtn.iloc[1:].mean() * 365, mkt_rtn.iloc[1:].std() * np.sqrt(365), mdd],
-                               index=["CAGR", "Mean","STD","MDD"], columns=["MKT"])
+        mdd= round((-drawdown).max(), 3)
+        
+        mkt = pd.DataFrame([calculate_cagr(mkt_rtn2), 
+                            mkt_rtn2.mean() * 365, 
+                            mkt_rtn2.std() * np.sqrt(365),
+                            mdd],
+                            index=["CAGR", "Mean","STD","MDD"], 
+                            columns=["MKT"])
         
         return_df = pd.concat([return_df, mkt], axis=1)
     return_df.loc["Sharpe",:] = (return_df.loc["Mean",:]) / (return_df.loc["STD",:])
     
     return return_df
+
+
 
 # Daily 손익으로 변환해준다
 def change_weekly_to_daily(weekly_price_df, weekly_rtn_df, weekly_weight_df, daily_price, freq):
@@ -84,40 +115,107 @@ def change_weekly_to_daily(weekly_price_df, weekly_rtn_df, weekly_weight_df, dai
                                                   .fillna(0)
     return pf_value
 
+
+
 def draw_return_result(return_dict:dict, 
-                       mkt_rtn=None):
+                       mkt_rtn=None,
+                       one_plot=False,
+                       start_date=None):
     
-    '''return_dict : dict(리턴이 담긴 딕셔러니)
-       mkt_rtn     : Series(마켓 리턴이 담긴 시리즈)'''
-        
-    for key, df in return_dict.items():
+    '''
+    return_dict : dict(리턴이 담긴 딕셔러니)
+    mkt_rtn     : Series(마켓 리턴이 담긴 시리즈)
+    one_plot    : T/F (한개에 모든 플랏을 그릴지 결정(start_date 수동으로 지정해야함))
+    start_date : plot을 언제부터 그릴지 결정 (one_plot = True일 때만 사용가능)
+       '''
+    
+    # 전부 하나의 plot에 그리는 경우...
+    if one_plot == True:
         fig, axes = plt.subplots(3,1, sharex=True, figsize=(24,24), gridspec_kw={'height_ratios': [4, 1, 1]})
-        cum_df = (df+1).cumprod()
-        cum_df.plot(ax=axes[0])
-            
-        axes[0].set_title(f"Cross-Sectional Momentum Value Weighted Result of {key}")
-        axes[0].grid()
-        axes[0].legend(["Startegy","MKT"])
         
-        peak = cum_df.cummax()
-        drawdown = (cum_df-peak)/peak
-        drawdown.plot(ax=axes[1])
-        axes[1].set_title("Draw Down")
-        axes[1].grid()
-        
-        df.plot(ax=axes[2])
-        axes[2].grid()
-        
-        if mkt_rtn != None:
-            mktcum = (mkt_rtn+1).cumprod()
-            mktcum.plot(ax=axes[0])
+        for key, df in return_dict.items():
+            df = df.loc[start_date:]
+            df.loc[start_date] = 0 # 투자 시작일 값은 0으로 셋팅(그래야 포폴 가치가 1이 됨)
+            cum_df = (df+1).cumprod()
+            cum_df.plot(ax=axes[0], label=key)
+
+            axes[0].set_title("Cross-Sectional Momentum Value Weighted Result")
             axes[0].grid()
-            axes[0].legend(["Startegy","MKT"])
-            
-            peak = mktcum.cummax()
-            drawdown = (mktcum-peak) / peak
-            drawdown.plot(ax=axes[1], alpha=0.3)
+
+            peak = cum_df.cummax()
+            drawdown = (cum_df-peak)/peak
+            drawdown.plot(ax=axes[1])
+            axes[1].set_title("Draw Down")
             axes[1].grid()
+
+            df.plot(ax=axes[2])
+            axes[2].grid()
+
+            if mkt_rtn != None:
+                mkt_rtn2 = mkt_rtn.loc[start_date:]
+                mktcum = (mkt_rtn2+1).cumprod()
+                mktcum.plot(ax=axes[0])
+                axes[0].grid()
+                
+                
+                peak = mktcum.cummax()
+                drawdown = (mktcum-peak) / peak
+                drawdown.plot(ax=axes[1], alpha=0.3)
+                axes[1].grid()
+
+                mkt_rtn.plot(ax=axes[2], alpha=0.3)
+                axes[2].grid()
+                
+        plt.tight_layout()
+        axes[0].legend();
+              
+    # 전부 별개의 plot에 그리는 경우...            
+    else:
+        for key, df in return_dict.items():
+            fig, axes = plt.subplots(3,1, sharex=True, figsize=(24,24), gridspec_kw={'height_ratios': [4, 1, 1]})
             
-            mkt_rtn.plot(ax=axes[2], alpha=0.3)
-            axes[2].grid();      
+            cum_df = (df+1).cumprod()
+            cum_df.plot(ax=axes[0])
+
+            axes[0].set_title(f"Cross-Sectional Momentum Value Weighted Result of {key}")
+            axes[0].grid()
+            axes[0].legend([f"{key}","MKT"])
+
+            peak = cum_df.cummax()
+            drawdown = (cum_df-peak)/peak
+            drawdown.plot(ax=axes[1])
+            axes[1].set_title("Draw Down")
+            axes[1].grid()
+
+            df.plot(ax=axes[2])
+            axes[2].grid()
+
+            if mkt_rtn != None:
+                mktcum = (mkt_rtn+1).cumprod()
+                mktcum.plot(ax=axes[0])
+                axes[0].grid()
+                axes[0].legend(["Startegy","MKT"])
+
+                peak = mktcum.cummax()
+                drawdown = (mktcum-peak) / peak
+                drawdown.plot(ax=axes[1], alpha=0.3)
+                axes[1].grid()
+
+                mkt_rtn.plot(ax=axes[2], alpha=0.3)
+                axes[2].grid()
+            plt.tight_layout()
+            plt.legend();
+
+
+def draw_coin_count(time_series_coin_num:dict):
+    '''time_series_coin_num :  코인 개수가 담긴 딕셔너리'''
+    fig, ax = plt.subplots(1,1)
+    plt.title("Change of Number of coins")
+    plt.ylabel("Number of Coins")
+    
+    for key, df in time_series_coin_num.items():
+        df.plot(figsize=(24,12), ax=ax, label=key)
+    
+    plt.legend()
+    plt.grid()
+    plt.tight_layout();
