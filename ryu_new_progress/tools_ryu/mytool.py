@@ -1,6 +1,7 @@
 import numpy as np 
 import pandas as pd 
 import matplotlib.pyplot as plt
+import matplotlib as mpl 
 from statsmodels.api import OLS, add_constant
 
 
@@ -128,6 +129,8 @@ def draw_return_result(return_dict:dict,
     one_plot    : T/F (한개에 모든 플랏을 그릴지 결정(start_date 수동으로 지정해야함))
     start_date : plot을 언제부터 그릴지 결정 (one_plot = True일 때만 사용가능)
        '''
+       
+    mpl.style.use("seaborn")
     
     # 전부 하나의 plot에 그리는 경우...
     if one_plot == True:
@@ -140,35 +143,35 @@ def draw_return_result(return_dict:dict,
             cum_df.plot(ax=axes[0], label=key)
 
             axes[0].set_title("Cross-Sectional Momentum Value Weighted Result")
-            axes[0].grid()
+            axes[0].legend()
+            #axes[0].grid(axis="both")
 
             peak = cum_df.cummax()
             drawdown = (cum_df-peak)/peak
             drawdown.plot(ax=axes[1])
             axes[1].set_title("Draw Down")
-            axes[1].grid()
+            #axes[1].grid(axis="both")
 
             df.plot(ax=axes[2])
-            axes[2].grid()
+            #axes[2].grid(axis="both")
 
             if mkt_rtn != None:
                 mkt_rtn2 = mkt_rtn.loc[start_date:]
                 mktcum = (mkt_rtn2+1).cumprod()
                 mktcum.plot(ax=axes[0])
-                axes[0].grid()
+                #axes[0].grid(axis="both")
                 
                 
                 peak = mktcum.cummax()
                 drawdown = (mktcum-peak) / peak
                 drawdown.plot(ax=axes[1], alpha=0.3)
-                axes[1].grid()
+                #axes[1].grid(axis="both")
 
                 mkt_rtn.plot(ax=axes[2], alpha=0.3)
-                axes[2].grid()
+                #axes[2].grid(axis="both")
                 
         plt.tight_layout()
-        axes[0].legend();
-              
+   
     # 전부 별개의 plot에 그리는 경우...            
     else:
         for key, df in return_dict.items():
@@ -178,31 +181,31 @@ def draw_return_result(return_dict:dict,
             cum_df.plot(ax=axes[0])
 
             axes[0].set_title(f"Cross-Sectional Momentum Value Weighted Result of {key}")
-            axes[0].grid()
+            #axes[0].grid(axis="both")
             axes[0].legend([f"{key}","MKT"])
 
             peak = cum_df.cummax()
             drawdown = (cum_df-peak)/peak
             drawdown.plot(ax=axes[1])
             axes[1].set_title("Draw Down")
-            axes[1].grid()
+            #axes[1].grid(axis="both")
 
             df.plot(ax=axes[2])
-            axes[2].grid()
+            #axes[2].grid(axis="both")
 
             if mkt_rtn != None:
                 mktcum = (mkt_rtn+1).cumprod()
                 mktcum.plot(ax=axes[0])
-                axes[0].grid()
+                #axes[0].grid(axis="both")
                 axes[0].legend(["Startegy","MKT"])
 
                 peak = mktcum.cummax()
                 drawdown = (mktcum-peak) / peak
                 drawdown.plot(ax=axes[1], alpha=0.3)
-                axes[1].grid()
+                #axes[1].grid(axis="both")
 
                 mkt_rtn.plot(ax=axes[2], alpha=0.3)
-                axes[2].grid()
+                #axes[2].grid(axis="both")
             plt.tight_layout()
             plt.legend();
 
@@ -217,5 +220,5 @@ def draw_coin_count(time_series_coin_num:dict):
         df.plot(figsize=(24,12), ax=ax, label=key)
     
     plt.legend()
-    plt.grid()
+    #plt.grid(axis="both")
     plt.tight_layout();
