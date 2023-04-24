@@ -9,7 +9,7 @@ def calculate_cagr(return_df):
     holding_year = (len(return_df) / 365)
     cum = (return_df+1).cumprod()
     cagr = (cum.iloc[-1] / cum.iloc[0]) ** (1/holding_year) -1
-    return str(cagr.round(4)*100) + "%"
+    return round(cagr, 4)
 
 
 def run_alpha_regression(return_dict:dict, 
