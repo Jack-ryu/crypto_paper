@@ -48,6 +48,7 @@ class CrossSectional:
         
         return mask
     
+    
     def make_market_index(self, mktcap_value=None, vol_value=None):
         '''
         return value weighted market index(Series)
@@ -152,5 +153,9 @@ class CrossSectional:
             pf_save.index = pd.to_datetime(pf_save.index)
             pf_save[pf_save.index[0] - pd.Timedelta(days=1)] = 1 # 투자 시작일 포트폴리오 가치를 1로 셋팅
             final_value[f"G{i}"] = pf_save.sort_index().pct_change().fillna(0)
+            
+        # 롱숏 계산
+        long_short = final_value[f"G{group_num}"] - final_value["G1"]
+        final_value["Long-Short"] = long_short
         
         return final_value, group_coin_count
