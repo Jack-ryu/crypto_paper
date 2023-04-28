@@ -71,7 +71,9 @@ def print_statistics(return_dict:dict,
         drawdown = (cum_df-peak)/peak
         mdd.append(round((-drawdown).max(),3))
     
-    return_df = pd.DataFrame([cagr,mean,std,mdd], index=["CAGR", "Mean","STD","MDD"])
+    col = [key for key, df in return_dict.items()]
+    
+    return_df = pd.DataFrame([cagr,mean,std,mdd], index=["CAGR", "Mean","STD","MDD"], columns=col)  
     
     if mkt_rtn != None:
         
@@ -119,12 +121,16 @@ def change_weekly_to_daily(weekly_price_df, weekly_rtn_df, weekly_weight_df, dai
 
 
 def draw_return_result(return_dict:dict, 
+                       title:str,
+                       log=True,
                        mkt_rtn=None,
                        one_plot=False,
                        start_date=None):
     
     '''
     return_dict : dict(리턴이 담긴 딕셔러니)
+    title       : title을 지정할 수 있습니다
+    log         : 로그 y축 (Default=True)
     mkt_rtn     : Series(마켓 리턴이 담긴 시리즈)
     one_plot    : T/F (한개에 모든 플랏을 그릴지 결정(start_date 수동으로 지정해야함))
     start_date : plot을 언제부터 그릴지 결정 (one_plot = True일 때만 사용가능)
@@ -140,9 +146,9 @@ def draw_return_result(return_dict:dict,
             df = df.loc[start_date:]
             df.loc[start_date] = 0 # 투자 시작일 값은 0으로 셋팅(그래야 포폴 가치가 1이 됨)
             cum_df = (df+1).cumprod()
-            cum_df.plot(ax=axes[0], label=key)
+            cum_df.plot(ax=axes[0], label=key, logy=log)
 
-            axes[0].set_title("Cross-Sectional Momentum Value Weighted Result")
+            axes[0].set_title(f"{title}")
             axes[0].legend()
             #axes[0].grid(axis="both")
 
@@ -158,7 +164,7 @@ def draw_return_result(return_dict:dict,
             if mkt_rtn != None:
                 mkt_rtn2 = mkt_rtn.loc[start_date:]
                 mktcum = (mkt_rtn2+1).cumprod()
-                mktcum.plot(ax=axes[0])
+                mktcum.plot(ax=axes[0], logy=log)
                 #axes[0].grid(axis="both")
                 
                 
@@ -178,9 +184,9 @@ def draw_return_result(return_dict:dict,
             fig, axes = plt.subplots(3,1, sharex=True, figsize=(24,24), gridspec_kw={'height_ratios': [4, 1, 1]})
             
             cum_df = (df+1).cumprod()
-            cum_df.plot(ax=axes[0])
+            cum_df.plot(ax=axes[0],logy=log)
 
-            axes[0].set_title(f"Cross-Sectional Momentum Value Weighted Result of {key}")
+            axes[0].set_title(f"{title} - {key}")
             #axes[0].grid(axis="both")
             axes[0].legend([f"{key}","MKT"])
 
@@ -195,7 +201,7 @@ def draw_return_result(return_dict:dict,
 
             if mkt_rtn != None:
                 mktcum = (mkt_rtn+1).cumprod()
-                mktcum.plot(ax=axes[0])
+                mktcum.plot(ax=axes[0], logy=log)
                 #axes[0].grid(axis="both")
                 axes[0].legend(["Startegy","MKT"])
 
@@ -210,15 +216,23 @@ def draw_return_result(return_dict:dict,
             plt.legend();
 
 
-def draw_coin_count(time_series_coin_num:dict):
-    '''time_series_coin_num :  코인 개수가 담긴 딕셔너리'''
+def draw_coin_count(time_series_coin_num:dict, draw_mkt=True):
+    '''time_series_coin_num :  코인 개수가 담긴 딕셔너리,
+       draw_mkt = True(딕셔너리), False(딕셔너리의 딕셔너리를 줘야함)
+    '''
     fig, ax = plt.subplots(1,1)
     plt.title("Change of Number of coins")
     plt.ylabel("Number of Coins")
     
-    for key, df in time_series_coin_num.items():
-        df.plot(figsize=(24,12), ax=ax, label=key)
-    
+    if draw_mkt:
+        for key, df in time_series_coin_num.items():
+            df.plot(figsize=(24,12), ax=ax, label=key)
+    else:
+        for outer_key, df_dict in time_series_coin_num.items(): #바깥쪽 Loop
+            sum_df = pd.DataFrame()
+            for key, df in df_dict.items(): #안쪽 Loop
+                sum_df = pd.concat([sum_df, df], axis=1).sum(1)
+            sum_df.plot(figsize=(24,12), ax=ax, label=outer_key)
+        
     plt.legend()
-    #plt.grid(axis="both")
     plt.tight_layout();
