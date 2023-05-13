@@ -50,8 +50,11 @@ def print_statistics(return_dict:dict,
     std = []
     cagr = []
     mdd = []
-    
+    key_list = []
+
     for key, df in return_dict.items():
+        key_list.append(key)
+        
         if start_date != None:
             df2 = df.loc[start_date:].iloc[1:]
         else:
@@ -76,7 +79,8 @@ def print_statistics(return_dict:dict,
     return_df = pd.DataFrame([cagr,mean,std,mdd], index=["CAGR", "Mean","STD","MDD"], columns=col)  
     
     if mkt_rtn != None:
-        
+        key_list.append("MKT")
+       
         if start_date != None:
             mkt_rtn2 = mkt_rtn.loc[start_date:].iloc[1:]
         else:
@@ -94,11 +98,10 @@ def print_statistics(return_dict:dict,
                             index=["CAGR", "Mean","STD","MDD"], 
                             columns=["MKT"])
         
-        return_df = pd.concat([return_df, mkt], axis=1)
+        return_df = pd.concat([return_df, mkt], axis=1, keys=key_list)
     return_df.loc["Sharpe",:] = (return_df.loc["Mean",:]) / (return_df.loc["STD",:])
     
     return return_df
-
 
 
 # Daily 손익으로 변환해준다
