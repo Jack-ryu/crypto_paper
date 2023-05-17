@@ -8,8 +8,9 @@ import pandas as pd
   
 def simulate_strategy(group_weight_df:pd.DataFrame, daily_rtn_df:pd.DataFrame, fee_rate:float):
     '''
-    전략의 수익을 평가합니다(Long-Only Portfolio)
+    전략의 수익을 평가합니다(Long-Only Portfolio) / Daily Rebalancing도 가능함(Rebalancing은 Depand on DataFrame's Index)
     '''
+    
     pf_value = 1
     pf_dict = {}
     

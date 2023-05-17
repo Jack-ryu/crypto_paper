@@ -5,6 +5,12 @@ import ray
 
 ray.init(num_cpus=16, ignore_reinit_error=True)
 
+########################### 추가사항(2023-05-15) #########################
+# 속도 개선 (replace 제거)
+# inner_data_pp 추가 -> 코드 효율성을 위해서
+# 매주 모멘텀을 계산하고, 진입만 1/7씩 해준다 (Daily 단위로 모멘텀을 계산하지 않는다)
+##########################################################################
+
 
 def data_pp(data:pd.DataFrame, vender:str):
     # Initialize the Data
@@ -63,10 +69,33 @@ def screener(mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, mktcap_thresh, vol_thr
         mask = pd.DataFrame(1, index= mktcap_df.index, columns=mktcap_df.columns) 
     
     return mask  # 여기까진 맞다
+
+
+def inner_data_pp(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, n_group:int,
+                  day_of_week:str, number_of_coin_group:int, mktcap_thresh:int, vol_thresh:int, freq:str):
+    '''
+    Signal DataFrame을 생성하기 직전 필요한 데이터를 생성합니다
+    
+    Return : Tuple  -> [daily_rtn_df, weekly_mktcap, group_mask_dict]
+    '''
+    daily_rtn_df = price_df.pct_change(fill_method=None)
+    #group_coin_count = {}
+           
+    group_mask_dict = make_weekly_momentum_signal(price_df, mktcap_df, vol_df, n_group, day_of_week, 
+                                                number_of_coin_group, mktcap_thresh, vol_thresh, freq) # 함수의 args를 바로 넘겨준다 / Binary Signal이 담긴 DataFrame을 리턴한다
+
+    real_idx = [idx for idx in group_mask_dict["Q1"].index if idx in mktcap_df.index] # Q1은 무조건 존재하니까
+    
+    try:
+        mktcap_used = mktcap_df.loc[real_idx]
+    except:
+        mktcap_used = mktcap_df.loc[real_idx[:-1]] # Index 이슈가 있어서 추가했음(2023-05-15 Edited)
+
+    return daily_rtn_df, mktcap_used, group_mask_dict
     
 
-def make_weekly_momentum_mask(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, n_group:int, day_of_week:str,
-                              number_of_coin_group:int, mktcap_thresh=None, vol_thresh=None):
+def make_weekly_momentum_signal(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, n_group:int, day_of_week:str,
+                              number_of_coin_group:int, mktcap_thresh=None, vol_thresh=None, freq="weekly"):
     '''
     횡단면 Weekly Momentum을 기준으로 그룹을 나눈 후, 그룹의 마스크를 반환합니다
 
@@ -77,14 +106,18 @@ def make_weekly_momentum_mask(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol
         number_of_coin_group : 그룹당 최소 필요한 코인 수
         mktcap_thresh : 최소 마켓켑 (MA30)
         vol_thresh : 최소 거래대금 (MA30)
+        freq : signal의 frequency ["Daily","Weekly"] / Default "Weekly"
     '''
     mktcap_df_ = mktcap_df.copy()
     mask = screener(mktcap_df_,vol_df, mktcap_thresh, vol_thresh) # Daily 마스크를 받는다
-    weekly_mask = mask.resample("W-"+day_of_week).last()
-        
-    # 주간 데이터를 생성합니다
-    weekly_rtn = price_df.pct_change(7,fill_method=None).resample("W-"+day_of_week).last()
-    weekly_rtn_masked = weekly_rtn * weekly_mask  # 그룹을 나눌때 사용함 
+    
+    if (freq == "weekly") or (freq == "Weekly"):
+        mask_used = mask.resample("W-"+day_of_week).last()
+        weekly_rtn = price_df.pct_change(7,fill_method=None).resample("W-"+day_of_week).last()
+    elif (freq == "daily") or (freq == "Daily"):
+        mask_used = mask
+        weekly_rtn = price_df.pct_change(7,fill_method=None)
+    weekly_rtn_masked = weekly_rtn * mask_used  # 그룹을 나눌때 사용함 (mktcap, vol 스크리닝 통과한 코인들만의 리턴이 담겨있다)
         
     # 언제부터 시작하는 지 (최소 q*n개의 코인이 필요)
     cnt = weekly_rtn_masked.count(1) # 이걸 리턴
@@ -94,22 +127,24 @@ def make_weekly_momentum_mask(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol
     # rank 계산
     rank = weekly_rtn_masked[strategy_start:].rank(axis=1, method="first")
     coin_count = rank.count(axis=1)  
-    rank_thresh = coin_count.apply(lambda x: [i for i in range(0,x, x//n_group)])
+    rank_thresh = coin_count.apply(lambda x: [i for i in range(0, x, x//n_group)])
     
     # rank 기반으로 그룹을 나눈다    
     group_mask_dict = {}    
     for i in range(1, n_group+1):
         if i == 1: # 처음
-            thresh = rank_thresh.apply(lambda x: x[i])
-            group_mask = rank.apply(lambda x: x <= thresh, axis=0).replace({True:1, False:np.nan})
+            thresh = rank_thresh.apply(lambda x: x[i])  
+            group_rank =  rank.apply(lambda x: x <= thresh, axis=0)
         elif i == n_group: # 마지막
             thresh = rank_thresh.apply(lambda x: x[i-1])
-            group_mask = rank.apply(lambda x: thresh < x, axis=0).replace({True:1, False:np.nan})
+            group_rank = rank.apply(lambda x: thresh < x, axis=0)
         else:
             thresh = rank_thresh.apply(lambda x: x[i])
             thresh_1 = rank_thresh.apply(lambda x: x[i-1]) # 뒤에거를 가져와야함
-            group_mask = rank.apply(lambda x: (thresh_1 < x) & (x <= thresh), axis=0).replace({True:1, False:np.nan})
-        
+            group_rank = rank.apply(lambda x: (thresh_1 < x) & (x <= thresh), axis=0)
+            
+        group_mask = np.where(group_rank == True, 1, np.nan) # 속도 개선을 위해 replace()를 np.where로 수정 (2023-05-15 Edited)
+        group_mask = pd.DataFrame(group_mask, index=rank.index, columns=rank.columns)
         group_mask_dict[f"Q{i}"] = group_mask
         
     return group_mask_dict#, cnt
