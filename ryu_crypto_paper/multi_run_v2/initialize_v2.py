@@ -140,7 +140,7 @@ def make_weekly_momentum_signal(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, v
         ma: screen을 할 때, MA를 쓸지 안쓸지 (True or False)
     '''
     mktcap_df_ = mktcap_df.copy()
-    mask = screener(mktcap_df_,vol_df, mktcap_thresh, vol_thresh, ma=ma) # Daily 마스크를 받는다
+    mask = screener(mktcap_df_, vol_df, mktcap_thresh, vol_thresh, ma=ma) # Daily 마스크를 받는다
     
     if (freq == "weekly") or (freq == "Weekly"):
         mask_used = mask.resample("W-"+day_of_week).last()
