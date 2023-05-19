@@ -73,15 +73,17 @@ def simulate_longshort_d(long_weight_df:pd.DataFrame, short_weight_df:pd.DataFra
     전략의 수익을 평가합니다 (long-short Portfolio)
     margin (str) : ["isolate","cross"]
     
+    Short을 반대의 수익을 주는 하나의 상품이라 생각하고 접근
     
     Daily로 1/7씩 진입
     '''
     start_idx = long_weight_df.index[0]        
     
     # Initial value setting   
-    pf_value = 1
+    asset_value = 0
     pf_dict = {}
-    cash = 6/7
+    #cash = 6/7 # 첫날 투자해서 Cash 1/7은 이미 빠져나감
+    pf_value = 1 # 현금+자산가치로 1이된다
     
     # 시작 weight를 지정해준다(첫 weight에서 투자 시작, 장마감 직전에 포트폴리오 구성)
     short_weight = short_weight_df.iloc[0]
@@ -89,24 +91,28 @@ def simulate_longshort_d(long_weight_df:pd.DataFrame, short_weight_df:pd.DataFra
     
     # 최초 Dollar Value 할당 / 투자 첫날
     dollar_value_of_sell = (short_weight * 0.5/7) 
-    dollar_value_of_buy = (long_weight * 0.5/7)  # dollar_value_of_sell - dollar_value_of_buy=0 성립
-    
+    dollar_value_of_buy  = (long_weight * 0.5/7)  # dollar_value_of_sell - dollar_value_of_buy=0 성립
     dollar_value_of_sell = dollar_value_of_sell * (1-fee_rate) # fee 차감
     dollar_value_of_buy = dollar_value_of_buy * (1-fee_rate) 
+    
+    # 공매도는 음수, 매수는 양수로 DV가 찍혀있다
+    #dollar_value_array = np.nan_to_num(dollar_value_of_sell) + np.nan_to_num(dollar_value_of_buy)
     
     first_week_start = start_idx + pd.Timedelta(days=1)
     first_week_end = start_idx + pd.Timedelta(days=6)
     
     # 첫 6일간 1/7씩 계속 진입해야한다
-    for idx, row in daily_rtn_df.loc[first_week_start:first_week_end].iterrows(): # Daily로 반복 / 시작 weight 구성 다음 날부터 성과를 평가
+    for idx, row in daily_rtn_df.loc[first_week_start:].iterrows(): # Daily로 반복 / 시작 weight 구성 다음 날부터 성과를 평가
+        #dollar_value_array_update = dollar_value_array * (1+np.nan_to_num(row)) # 수익률 변화 기록
         dollar_value_of_sell_update = dollar_value_of_sell * (1 + np.nan_to_num(-row)) # position 잡고 있는 애들은 가격 변화를 기록
         dollar_value_of_buy_update  = dollar_value_of_buy * (1 + np.nan_to_num(row)) 
         
         dollar_gain_sell = dollar_value_of_sell_update - dollar_value_of_sell
         dollar_gain_buy = dollar_value_of_buy_update - dollar_value_of_buy
+        total_dollar_gain = np.nan_to_num(dollar_gain_buy) + np.nan_to_num(dollar_gain_sell)
         
-        pf_value = np.nansum(dollar_value_of_buy_update) + np.nansum(dollar_value_of_sell_update) + cash # pf_Value 변화 기록
-        print(pf_value)
+        pf_value = pf_value + np.nansum(total_dollar_gain) # pf_Value 변화 기록
+        print(idx, pf_value)
         
         today_short_weight = short_weight_df.loc[idx] 
         today_long_weight = long_weight_df.loc[idx]
@@ -118,8 +124,7 @@ def simulate_longshort_d(long_weight_df:pd.DataFrame, short_weight_df:pd.DataFra
         dollar_value_of_buy = new_dollar_value_of_buy + np.nan_to_num(dollar_value_of_buy)
         
         
-        cash -= 1/7 
-        
+        #cash -= 1/7         
         # 여기까지하면 최초 1/7씩 진입이 끝난다
         
     #if margin == "isolate":
@@ -221,24 +226,27 @@ def simulate_longshort_d(long_weight_df:pd.DataFrame, short_weight_df:pd.DataFra
 #    
 #       공매도하고 Cash를 받고, 받은만큼 주식을 산다
 #    '''
-#    
+#    # Setting the Initial values 
 #    cash = 0
 #    asset_value = 0
 #    pf_value = cash + asset_value
 #      
-#    # 첫 일주일
-#    for date in long_weight_df.index:
+#    # 첫 일주일(최초 1/7씩 진입)
+#    for date in long_weight_df.index[:6]:
 #        today_price = price_df.loc[date]
 #        today_short_weight = short_weight_df.loc[date]
-#        today_long_weight = long_weight_df.loc[date]
+#        today_long_weight  = long_weight_df.loc[date]
 #        
-#        short_coin_num = (today_short_weight * (1/7) / today_price) # 오늘 코인을 몇 개 사야하는 지 구한다(매일 1/7씩 진입)
-#        long_coin_num  = (today_long_weight * (1/7)) / today_price
+#        # 오늘 코인을 몇 개 사야하는 지 구한다 (매일 1/7씩 진입)
+#        short_coin_num = -(today_short_weight * (1/7)  / today_price)  # Short 개수는 음수로 기록
+#        long_coin_num  =  (today_long_weight  * (1/7) / today_price)
 #        
-#        # 공매도하고, 그만큼 현금을 받는다 
-#        asset_value_array_short = short_coin_num * today_price
+#        # 공매도하고, 그만큼 현금을 받는다 (Price는 지불해야하는 가격이니, 거기에 마이너스를 붙이면 숏을 했을 때 수취하는 현금이 된다)
+#        asset_value_array_short = short_coin_num * (-today_price)
 #        cash += np.nansum(asset_value_array_short)
-#        asset_value_array_long = long_coin_num * cash # 현금만큼 Long을 한다 
-#        cash -= np.nansum(asset_value_array_long) # 코인을 구입 했기 때문에 현금을 차금한다
+#        asset_value_array_long = long_coin_num * today_price # 수취한 현금만큼 Long을 한다 
+#        cash -= np.nansum(asset_value_array_long) # 코인을 구입 했기 때문에 현금을 차감한다
 #        
+#        asset_value = np.nansum(asset_value_array_short) + np.nansum(asset_value_array_long) + cash
 #        print(date,cash)
+#        print("Asset", asset_value)
