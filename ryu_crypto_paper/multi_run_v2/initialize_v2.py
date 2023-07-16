@@ -98,11 +98,11 @@ def screener(mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, mktcap_thresh, vol_thr
         else: # 아무 조건이 안 걸리는 경우 (전부 1로 채운 mask 생성)
             mask = pd.DataFrame(1, index= mktcap_df.index, columns=mktcap_df.columns)     
     
-    return mask  # 여기까진 맞다
+    return mask # 여기까진 맞다
 
 
 def inner_data_pp(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, n_group:int,
-                  day_of_week:str, number_of_coin_group:int, mktcap_thresh:int, vol_thresh:int, freq:str):
+                  day_of_week:str, number_of_coin_group:int, mktcap_thresh:int, vol_thresh:int, look_back:int):
     '''
     Signal DataFrame을 생성하기 직전 필요한 데이터를 생성합니다
     
@@ -111,21 +111,21 @@ def inner_data_pp(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataF
     daily_rtn_df = price_df.pct_change(fill_method=None)
     #group_coin_count = {}
            
-    group_mask_dict = make_weekly_momentum_signal(price_df, mktcap_df, vol_df, n_group, day_of_week, 
-                                                number_of_coin_group, mktcap_thresh, vol_thresh, freq) # 함수의 args를 바로 넘겨준다 / Binary Signal이 담긴 DataFrame을 리턴한다
+    group_mask_dict, mask = make_weekly_momentum_signal(price_df, mktcap_df, vol_df, n_group, day_of_week, 
+                                                number_of_coin_group, mktcap_thresh, vol_thresh, look_back=look_back) # 함수의 args를 바로 넘겨준다 / Binary Signal이 담긴 DataFrame을 리턴한다
 
     real_idx = [idx for idx in group_mask_dict["Q1"].index if idx in mktcap_df.index] # Q1은 무조건 존재하니까
     
     try:
-        mktcap_used = mktcap_df.loc[real_idx]
+        mktcap_used = mktcap_df.loc[real_idx] * mask.loc[real_idx]
     except:
-        mktcap_used = mktcap_df.loc[real_idx[:-1]] # Index 이슈가 있어서 추가했음(2023-05-15 Edited)
+        mktcap_used = mktcap_df.loc[real_idx[:-1]] * mask.loc[real_idx[:-1]] # Index 이슈가 있어서 추가했음(2023-05-15 Edited)
 
-    return daily_rtn_df, mktcap_used, group_mask_dict
-    
+    return daily_rtn_df, mktcap_used, group_mask_dict, mask
+
 
 def make_weekly_momentum_signal(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, n_group:int, day_of_week:str,
-                              number_of_coin_group:int, mktcap_thresh=None, vol_thresh=None, freq="weekly", ma=True):
+                              number_of_coin_group:int, mktcap_thresh=None, vol_thresh=None, ma=True, look_back=14):
     '''
     횡단면 Weekly Momentum을 기준으로 그룹을 나눈 후, 그룹의 마스크를 반환합니다
 
@@ -136,18 +136,14 @@ def make_weekly_momentum_signal(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, v
         number_of_coin_group : 그룹당 최소 필요한 코인 수
         mktcap_thresh : 최소 마켓켑 (MA30)
         vol_thresh : 최소 거래대금 (MA30)
-        freq : signal의 frequency ["Daily","Weekly"] / Default "Weekly"
         ma: screen을 할 때, MA를 쓸지 안쓸지 (True or False)
+        look_back: Default 7
     '''
     mktcap_df_ = mktcap_df.copy()
     mask = screener(mktcap_df_, vol_df, mktcap_thresh, vol_thresh, ma=ma) # Daily 마스크를 받는다
     
-    if (freq == "weekly") or (freq == "Weekly"):
-        mask_used = mask.resample("W-"+day_of_week).last()
-        weekly_rtn = price_df.pct_change(7,fill_method=None).resample("W-"+day_of_week).last()
-    elif (freq == "daily") or (freq == "Daily"):
-        mask_used = mask
-        weekly_rtn = price_df.pct_change(7,fill_method=None)
+    mask_used = mask.resample("W-"+day_of_week).last()
+    weekly_rtn = price_df.pct_change(look_back, fill_method=None).resample("W-"+day_of_week).last()
     weekly_rtn_masked = weekly_rtn * mask_used  # 그룹을 나눌때 사용함 (mktcap, vol 스크리닝 통과한 코인들만의 리턴이 담겨있다)
         
     # 언제부터 시작하는 지 (최소 q*n개의 코인이 필요)
@@ -178,10 +174,9 @@ def make_weekly_momentum_signal(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, v
         group_mask = pd.DataFrame(group_mask, index=rank.index, columns=rank.columns)
         group_mask_dict[f"Q{i}"] = group_mask
         
-    return group_mask_dict#, cnt
+    return group_mask_dict, mask#, cnt
 
 
-@ray.remote
 def make_market_index(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, mktcap_thresh=None, vol_thresh=None, ma=True):
     '''
     return value weighted market index(Series)
@@ -204,7 +199,7 @@ def make_market_index(price_df:pd.DataFrame, mktcap_df:pd.DataFrame, vol_df:pd.D
                                 
     weight = mktcap_screened.loc[start_idx:].apply(lambda x: x / np.nansum(x), axis=1)
     mkt_rtn = rtn_df.loc[start_idx:] * weight.shift(1)
-    time_series_coin_num = mkt_rtn.count(axis=1)
+    #time_series_coin_num = mkt_rtn.count(axis=1)
     mkt_index = mkt_rtn.sum(1) 
     
     return mkt_index#, time_series_coin_num # 수익이 담긴 pd.Series

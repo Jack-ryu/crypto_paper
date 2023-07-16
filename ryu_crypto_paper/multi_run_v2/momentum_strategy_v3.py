@@ -9,8 +9,8 @@ ray.init(num_cpus=16, ignore_reinit_error=True)
 
 ######################## - V3 - 2023-05-15 Edited ######################
 # 1. Daily로 시그널 계산
+# 2023-05-25 수정: Look-Back Window 지정 가능
 # ######################################################################
-
 
 
 @ ray.remote 
@@ -47,7 +47,7 @@ def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df:pd.DataFrame
         if (freq == "weekly") or (freq == "Weekly"):
             final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
         elif (freq == "daily") or (freq == "Daily"):
-            final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=(group_weight)/7, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate) # 1/7 삭제
+            final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=(group_weight), daily_rtn_df=daily_rtn_df, fee_rate=fee_rate) # 1/7 삭제
              
     # 롱숏 계산 
     if (freq == "weekly") or (freq == "Weekly"):
@@ -56,9 +56,9 @@ def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df:pd.DataFrame
         final_value["LS-isolate"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
                                                      daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
     elif (freq == "daily") or (freq == "Daily"):
-        final_value["LS-cross"] = simulate_longshort(long_weight_df=(group_weight_list[-1]/7), short_weight_df=(group_weight_list[0]/7),    # 1/7 삭제
+        final_value["LS-cross"] = simulate_longshort(long_weight_df=(group_weight_list[-1]), short_weight_df=(group_weight_list[0]),    # 1/7 삭제
                                                      daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
-        final_value["LS-isolate"] = simulate_longshort(long_weight_df=(group_weight_list[-1]/7), short_weight_df=(group_weight_list[0]/7),
+        final_value["LS-isolate"] = simulate_longshort(long_weight_df=(group_weight_list[-1]), short_weight_df=(group_weight_list[0]),
                                                      daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
     
     return final_value  # group_coin_count
