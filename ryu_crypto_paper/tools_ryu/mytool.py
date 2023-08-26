@@ -76,7 +76,7 @@ def print_statistics(return_dict:dict,
     
     col = [key for key, df in return_dict.items()]
     
-    return_df = pd.DataFrame([cagr,mean,std,mdd], index=["CAGR", "Mean","STD","MDD"], columns=col)  
+    return_df = pd.DataFrame([mean,std,cagr,mdd], index=["Mean","STD","CAGR","MDD"], columns=col)  
     
     if mkt_rtn != None:
         key_list.append("MKT")
@@ -91,9 +91,9 @@ def print_statistics(return_dict:dict,
         drawdown = (cum_df-peak)/peak
         mdd= round((-drawdown).max(), 3)
         
-        mkt = pd.DataFrame([calculate_cagr(mkt_rtn2), 
-                            mkt_rtn2.mean() * 365, 
+        mkt = pd.DataFrame([mkt_rtn2.mean() * 365, 
                             mkt_rtn2.std() * np.sqrt(365),
+                            calculate_cagr(mkt_rtn2), 
                             mdd],
                             index=["CAGR", "Mean","STD","MDD"], 
                             columns=["MKT"])

@@ -4,7 +4,7 @@ import pandas as pd
 import ray
 
 from multi_run_v3.momentum import make_group_mask, make_group_jk_mask
-from multi_run_v3.backtest import simulate_longonly, simulate_longshort
+from multi_run_v3.backtest_v3 import simulate_longonly, simulate_longshort
 
 ray.init(num_cpus=16, ignore_reinit_error=True)
 
@@ -15,8 +15,9 @@ ray.init(num_cpus=16, ignore_reinit_error=True)
 @ ray.remote 
 def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFrame,
                                    daily_rtn_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame, mask_df:pd.DataFrame,
-                                   fee_rate:float, n_group:int, day_of_week:str):
-    '''
+                                   fee_rate:float, n_group:int, day_of_week:str, margin:str='cross',
+                                   leverage_ratio:int=1, coin_group:int=20, look_back:int=7):
+    '''s
     Value Weighted로 Cross-Sectional Momentum 투자 비중을 생성합니다
     
         day_of_week : Rebalancing을 진행할 요일 [MON,TUE,WED,THU,FRI,SAT,SUN]
@@ -29,8 +30,12 @@ def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFra
     final_value = {}
     group_weight_list = []
     
+    if look_back != 7:
+        weekly_rtn_df = price_df.pct_change(look_back, fill_method=None)
+        
     group_mask_dict = make_group_mask(price_df = price_df, weekly_rtn_df = weekly_rtn_df, 
-                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week)
+                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week,
+                                      coin_group=coin_group)
     mktcap_pp = mktcap_df.loc[group_mask_dict["Q1"].index]  # Weekly mktcap이 나온다
 
     for key, mask in group_mask_dict.items():
@@ -40,20 +45,19 @@ def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFra
         group_weight_list.append(group_weight)   # v5 추가(롱숏 계산을 위해)
         # 투자 성과를 측정합니다
         final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
-             
+        
+    tmp_daily_df = (daily_rtn_df * leverage_ratio).copy() # 레버리지 2배 사용 가정       
     # 롱숏 계산 
-    final_value["LS-cross"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                 daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
-    #final_value["LS-isolate"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-    #                                             daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
-    
-    return final_value  # group_coin_count
+    final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
+                                                 daily_rtn_df=tmp_daily_df, fee_rate=fee_rate, margin=margin)
 
+    return final_value  # group_coin_count
     
 @ray.remote
 def weekly_momentum_value_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd.DataFrame,
                                           daily_rtn_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame, mask_df:pd.DataFrame,
-                                          fee_rate:float, n_group:int, day_of_week:str, num_cap:float, margin:str='cross'):
+                                          fee_rate:float, n_group:int, day_of_week:str, num_cap:float, margin:str='cross',
+                                          reb:str='1', look_back:int=7, leverage_ratio:float=1, coin_group:int=20):
     '''
     Value Weighted로 투자 비중을 생성합니다 (상위 num_cap만큼 marketcap을 제한 해준다)
     
@@ -71,8 +75,12 @@ def weekly_momentum_value_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd.
     final_value = {}
     group_weight_list = []   
     
+    if look_back != 7:
+        weekly_rtn_df = price_df.pct_change(look_back, fill_method=None)
+    
     group_mask_dict = make_group_mask(price_df = price_df, weekly_rtn_df = weekly_rtn_df, 
-                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week)
+                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week, 
+                                      reb=reb, coin_group=coin_group)
     mktcap_pp = mktcap_df.loc[group_mask_dict["Q1"].index]
     mask_pp = mask_df.loc[group_mask_dict["Q1"].index]
     
@@ -90,7 +98,7 @@ def weekly_momentum_value_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd.
         target = mktcap_df_used.loc[date, target_col]
         mask_row = filtered.loc[date]
         mktcap_df_used.loc[date, mask_row] = target 
-    
+
     for key, mask in group_mask_dict.items():   
         # 그룹의 marketcap 개산
         group_mktcap = (mktcap_df_used * mask)
@@ -100,22 +108,18 @@ def weekly_momentum_value_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd.
         #group_coin_count[key] = group_weight.count(1)
         group_weight_list.append(group_weight)   # v5 추가(롱숏 계산을 위해)            
         # 투자 성과를 측정합니다
-        final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
-            
+        final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin=margin)
+    tmp_daily_df = (daily_rtn_df * leverage_ratio).copy() # 레버리지 2배 사용 가정    
     # 롱숏 계산 
-    if margin == 'cross':
-        final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                     daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
-    elif margin == 'isolate':
-        final_value["LS"]  = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                       daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
-    
+    final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
+                                            daily_rtn_df=tmp_daily_df, fee_rate=fee_rate, margin=margin)
     return final_value # group_coin_count
 
 @ray.remote
 def jk_momentum_value_weighted_capped(mktcap_df : pd.DataFrame,
                                       daily_rtn_df:pd.DataFrame, mask_df:pd.DataFrame,
-                                      fee_rate:float, n_group:int, day_of_week:str, num_cap:float):
+                                      fee_rate:float, n_group:int, day_of_week:str, num_cap:float,
+                                      leverage_ratio:int=1, margin:str='cross'):
     '''
     Value Weighted로 투자 비중을 생성합니다 (상위 num_cap만큼 marketcap을 제한 해준다)
     
@@ -163,10 +167,11 @@ def jk_momentum_value_weighted_capped(mktcap_df : pd.DataFrame,
         group_weight_list.append(group_weight)   # v5 추가(롱숏 계산을 위해)            
         # 투자 성과를 측정합니다
         final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
-            
+        
+    tmp_daily_df = (daily_rtn_df * leverage_ratio).copy()
     # 롱숏 계산 
-    final_value["LS-cross"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                 daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
+    final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
+                                                 daily_rtn_df=tmp_daily_df, fee_rate=fee_rate, margin="cross")
     #final_value["LS-isolate"]  = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
     #                                               daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
     
@@ -176,7 +181,8 @@ def jk_momentum_value_weighted_capped(mktcap_df : pd.DataFrame,
 @ray.remote
 def weekly_momentum_volume_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFrame, vol_df:pd.DataFrame,
                                            daily_rtn_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame, mask_df:pd.DataFrame,
-                                           fee_rate:float, n_group:int, day_of_week:str):
+                                           fee_rate:float, n_group:int, day_of_week:str, margin:str='cross',
+                                           leverage_ratio:int=1, coin_group:int=20, look_back:int=7):
     '''
     Value Weighted로 투자 비중을 생성합니다 (상위 num_cap만큼 marketcap을 제한 해준다)
     
@@ -193,8 +199,12 @@ def weekly_momentum_volume_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFr
     final_value = {}
     group_weight_list = []   
     
+    if look_back != 7:
+        weekly_rtn_df = price_df.pct_change(look_back, fill_method=None)
+    
     group_mask_dict = make_group_mask(price_df = price_df, weekly_rtn_df = weekly_rtn_df, 
-                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week)
+                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week,
+                                      coin_group=coin_group)
     mktcap_pp = mktcap_df.loc[group_mask_dict["Q1"].index]
     vol_pp = vol_df.loc[group_mask_dict["Q1"].index]
     mask_pp = mask_df.loc[group_mask_dict["Q1"].index]
@@ -210,19 +220,18 @@ def weekly_momentum_volume_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFr
         group_weight_list.append(group_weight)   # v5 추가(롱숏 계산을 위해)            
         # 투자 성과를 측정합니다
         final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
-            
+       
+    tmp_daily_df = (daily_rtn_df * leverage_ratio).copy()   
     # 롱숏 계산 
-    #final_value["LS-cross"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-    #                                             daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
-    final_value["LS-isolate"]  = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                   daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
-    
+    final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
+                                                 daily_rtn_df=tmp_daily_df, fee_rate=fee_rate, margin=margin)
     return final_value # group_coin_count
 
 @ray.remote
 def weekly_momentum_volume_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd.DataFrame, vol_df:pd.DataFrame,
                                            daily_rtn_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame, mask_df:pd.DataFrame,
-                                           fee_rate:float, n_group:int, day_of_week:str, num_cap:float, margin:str='cross'):
+                                           fee_rate:float, n_group:int, day_of_week:str, num_cap:float, margin:str='cross',
+                                           reb:str='1', look_back:int=7, leverage_ratio:int=1, coin_group:int=20):
     '''
     Value Weighted로 투자 비중을 생성합니다 (상위 num_cap만큼 marketcap을 제한 해준다)
     
@@ -240,8 +249,12 @@ def weekly_momentum_volume_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd
     final_value = {}
     group_weight_list = []   
     
+    if look_back != 7:
+        weekly_rtn_df = price_df.pct_change(look_back, fill_method=None)
+    
     group_mask_dict = make_group_mask(price_df = price_df, weekly_rtn_df = weekly_rtn_df, 
-                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week)
+                                      mask_df = mask_df, n_group = n_group, day_of_week = day_of_week, 
+                                      reb=reb, coin_group=coin_group)
     mktcap_pp = mktcap_df.loc[group_mask_dict["Q1"].index]
     vol_pp = vol_df.loc[group_mask_dict["Q1"].index]
     mask_pp = mask_df.loc[group_mask_dict["Q1"].index]
@@ -270,23 +283,21 @@ def weekly_momentum_volume_weighted_capped(price_df:pd.DataFrame, mktcap_df : pd
         #group_coin_count[key] = group_weight.count(1)
         group_weight_list.append(group_weight)   # v5 추가(롱숏 계산을 위해)            
         # 투자 성과를 측정합니다
-        final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
-            
-    # 롱숏 계산 
-    if margin == 'cross':
-        final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                     daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
-    elif margin == 'isolate':
-        final_value["LS"]  = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                       daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
+        final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin=margin)
     
+    tmp_rtn_df = (daily_rtn_df * leverage_ratio).copy()
+    # 롱숏 계산 
+    final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
+                                           daily_rtn_df=tmp_rtn_df, fee_rate=fee_rate, margin=margin)
+
     return final_value # group_coin_count
 
 
 @ray.remote
-def jk_volume_weighted_capped(mktcap_df : pd.DataFrame, vol_df:pd.DataFrame,
+def jk_volume_weighted_capped(mktcap_df:pd.DataFrame, vol_df:pd.DataFrame,
                                            daily_rtn_df:pd.DataFrame,  mask_df:pd.DataFrame,
-                                           fee_rate:float, n_group:int, day_of_week:str, num_cap:float):
+                                           fee_rate:float, n_group:int, day_of_week:str, num_cap:float,
+                                           leverage_ratio:int=1):
     '''
     Value Weighted로 투자 비중을 생성합니다 (상위 num_cap만큼 marketcap을 제한 해준다)
     
@@ -334,10 +345,10 @@ def jk_volume_weighted_capped(mktcap_df : pd.DataFrame, vol_df:pd.DataFrame,
         group_weight_list.append(group_weight)   # v5 추가(롱숏 계산을 위해)            
         # 투자 성과를 측정합니다
         final_value["Long_" + str(key)] = simulate_longonly(group_weight_df=group_weight, daily_rtn_df=daily_rtn_df, fee_rate=fee_rate)
-            
+    tmp_rtn_df = (daily_rtn_df * leverage_ratio).copy()
     # 롱숏 계산 
-    final_value["LS-cross"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
-                                                 daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="cross")
+    final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
+                                                 daily_rtn_df=tmp_rtn_df, fee_rate=fee_rate, margin="cross")
     #final_value["LS-isolate"]  = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
     #                                               daily_rtn_df=daily_rtn_df, fee_rate=fee_rate, margin="isolate")
     

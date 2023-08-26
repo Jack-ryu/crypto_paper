@@ -76,9 +76,13 @@ def screener(mktcap_df:pd.DataFrame, vol_df:pd.DataFrame, mktcap_thresh, vol_thr
                 mask = mktcap_mask * vol_mask
             else: # mkt만 조건이 있고, vol은 조건이 없는 경우
                 mask = mktcap_mask
-
-        else: # 아무 조건이 안 걸리는 경우 (전부 1로 채운 mask 생성)
-            mask = pd.DataFrame(1, index= mktcap_df.index, columns=mktcap_df.columns) 
+        else: 
+            if vol_thresh != None: # volume 조건만 걸리는 경우
+                vol_mask = (vol_df.rolling(window=30).mean() >= vol_thresh) 
+                vol_mask_ = np.where(vol_mask==True, 1, np.nan)
+                mask = pd.DataFrame(vol_mask_, index=vol_mask.index, columns=vol_mask.columns)               
+            else:# 아무 조건이 안 걸리는 경우 (전부 1로 채운 mask 생성)
+                mask = pd.DataFrame(1, index= mktcap_df.index, columns=mktcap_df.columns) 
 
     elif ma == False:
         if  mktcap_thresh != None:

@@ -75,9 +75,9 @@ def simulate_longshort(long_weight_df:pd.DataFrame, short_weight_df:pd.DataFrame
             long_rtn  = 1 + np.nan_to_num(rtn) 
 
             # Update each dollar value
-            dollar_value_of_sell_update = dollar_value_of_sell * short_rtn
+            dollar_value_of_sell_update = dollar_value_of_sell * short_rtn 
             dollar_value_of_sell_update = np.where(dollar_value_of_sell_update > 0, dollar_value_of_sell_update, 0) # 개별 코인의 가치는 최소 0이 된다(청산)
-            dollar_value_of_buy_update = dollar_value_of_buy * long_rtn
+            dollar_value_of_buy_update = dollar_value_of_buy * long_rtn 
 
             # Update the portfolio value of every days
             dollar_gain_sell = np.nansum(dollar_value_of_sell_update - dollar_value_of_sell)
@@ -131,7 +131,7 @@ def simulate_longshort(long_weight_df:pd.DataFrame, short_weight_df:pd.DataFrame
             dollar_value_of_sell_update = np.nan_to_num(postive_dv) + np.nan_to_num(negative_dv_positive_rtn) + np.nan_to_num(negative_dv_negative_rtn)
 
             # Long은 그냥 업데이트 해주면 된다
-            dollar_value_of_buy_update = dollar_value_of_buy * long_rtn
+            dollar_value_of_buy_update = dollar_value_of_buy * long_rtn 
 
             # Update the portfolio value of every days
             dollar_gain_sell = np.nansum(dollar_value_of_sell_update - dollar_value_of_sell)

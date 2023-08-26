@@ -43,8 +43,8 @@ class DataPreprocess:
                   vol_thresh:int,
                   ma=bool):
     
-        mktcap_df = self.mktcap_df
-        vol_df = self.vol_df
+        mktcap_df = self.mktcap_df#.replace(0, np.nan) # Test
+        vol_df = self.vol_df#.replace(0, np.nan)
         
         if ma:
             if  mktcap_thresh != None:

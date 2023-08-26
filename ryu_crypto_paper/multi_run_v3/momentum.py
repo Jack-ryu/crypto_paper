@@ -3,7 +3,7 @@ import pandas as pd
 
 
 def make_group_mask(price_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame,
-                    mask_df:pd.DataFrame, n_group:int, day_of_week:str):
+                    mask_df:pd.DataFrame, n_group:int, day_of_week:str, reb:str='1', coin_group:int=20): # 1이면 일주일, 2이면 2주일 간격 리벨런싱
     '''
     그룹의 마스크를 반환합니다
 
@@ -12,13 +12,13 @@ def make_group_mask(price_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame,
     '''
     last_day = price_df.index[-1]
     
-    weekly_mask = mask_df.resample("W-" + day_of_week).last()[:last_day]
-    weekly_rtn = weekly_rtn_df.resample("W-" + day_of_week).last()[:last_day]
+    weekly_mask = mask_df.resample(reb + "W-" + day_of_week).last()[:last_day]
+    weekly_rtn = weekly_rtn_df.resample(reb + "W-" + day_of_week).last()[:last_day]
     weekly_rtn_masked = weekly_rtn * weekly_mask 
         
     # 언제부터 시작하는 지 (최소 q*n개의 코인이 필요)
     cnt = weekly_rtn_masked.count(1)
-    thresh = cnt[cnt >= (n_group * 20)] # 여기서 start date가 나온다 / 각 그룹당 최소 20개의 코인이 필요함
+    thresh = cnt[cnt >= (n_group * coin_group)] # 여기서 start date가 나온다 / 각 그룹당 최소 20개의 코인이 필요함
     strategy_start = thresh.index[0] 
         
     # rank 계산
@@ -58,8 +58,8 @@ def make_group_jk_mask(daily_rtn_df:pd.DataFrame,
         n_group : 몇 개의 그룹으로 나눌 지
         day_of_week : Rebalancing을 진행할 요일 [MON,TUE,WED,THU,FRI,SAT,SUN]
     '''
-    j=8
-    k=2
+    j=28
+    k=7
      
     last_day = daily_rtn_df.index[-1]
     weekly_mask = mask_df.resample("W-" + day_of_week).last()[:last_day]
