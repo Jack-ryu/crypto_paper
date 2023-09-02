@@ -21,7 +21,7 @@ class DataPreprocess:
 
         df_pivot = pd.pivot_table(data=data,      # 2023-06-25 수정... pivot_table을 한 번만 call 한다
                                   values=[v,p,m],
-                                  index=data.index, 
+                                  index='date', 
                                   columns=col)
 
         vol_df = df_pivot[v]

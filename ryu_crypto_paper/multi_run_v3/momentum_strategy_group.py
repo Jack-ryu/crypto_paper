@@ -80,13 +80,17 @@ def weekly_momentum_volume_weighted_group(price_df:pd.DataFrame, mktcap_df : pd.
 
 def make_group_mask_rtn(price_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame,
                     mask_df:pd.DataFrame, n_group:int, day_of_week:str, 
-                    reb:str='1', coin_group:int=20): # 1이면 일주일, 2이면 2주일 간격 리벨런싱
+                    reb:str='1', coin_group:int=20,
+                    look_back:int=7): # 1이면 일주일, 2이면 2주일 간격 리벨런싱
     '''
     그룹의 마스크를 반환합니다
 
         n_group : 몇 개의 그룹으로 나눌 지
         day_of_week : Rebalancing을 진행할 요일 [MON,TUE,WED,THU,FRI,SAT,SUN]
     '''
+    if look_back != 7:
+        weekly_rtn_df = price_df.pct_change(look_back, fill_method=None)
+    
     last_day = price_df.index[-1]
     weekly_mask = mask_df.resample(reb + "W-" + day_of_week).last()[:last_day]
     weekly_rtn = weekly_rtn_df.resample(reb + "W-" + day_of_week).last()[:last_day]

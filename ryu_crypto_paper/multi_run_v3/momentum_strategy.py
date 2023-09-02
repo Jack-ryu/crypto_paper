@@ -16,7 +16,8 @@ ray.init(num_cpus=16, ignore_reinit_error=True)
 def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFrame,
                                    daily_rtn_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame, mask_df:pd.DataFrame,
                                    fee_rate:float, n_group:int, day_of_week:str, margin:str='cross',
-                                   leverage_ratio:int=1, coin_group:int=20, look_back:int=7):
+                                   leverage_ratio:int=1, coin_group:int=20, look_back:int=7,
+                                   q4:bool=False):
     '''s
     Value Weighted로 Cross-Sectional Momentum 투자 비중을 생성합니다
     
@@ -50,6 +51,9 @@ def weekly_momentum_value_weighted(price_df:pd.DataFrame, mktcap_df : pd.DataFra
     # 롱숏 계산 
     final_value["LS"] = simulate_longshort(long_weight_df=group_weight_list[-1], short_weight_df=group_weight_list[0],
                                                  daily_rtn_df=tmp_daily_df, fee_rate=fee_rate, margin=margin)
+    if q4:
+        final_value['LS_41'] = simulate_longshort(long_weight_df=group_weight_list[-2], short_weight_df=group_weight_list[0],
+                                                     daily_rtn_df=tmp_daily_df, fee_rate=fee_rate, margin=margin)
 
     return final_value  # group_coin_count
     
