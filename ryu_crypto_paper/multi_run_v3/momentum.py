@@ -2,8 +2,15 @@ import numpy as np
 import pandas as pd 
 
 
-def make_group_mask(price_df:pd.DataFrame, weekly_rtn_df:pd.DataFrame,
-                    mask_df:pd.DataFrame, n_group:int, day_of_week:str, reb:str='1', coin_group:int=20): # 1이면 일주일, 2이면 2주일 간격 리벨런싱
+def make_group_mask(
+    price_df:pd.DataFrame, 
+    weekly_rtn_df:pd.DataFrame,
+    mask_df:pd.DataFrame,
+    n_group:int,
+    day_of_week:str,
+    reb:str='1',# 1이면 일주일, 2이면 2주일 간격 리벨런싱
+    coin_group:int=20
+    ): 
     '''
     그룹의 마스크를 반환합니다
 
